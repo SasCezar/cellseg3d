@@ -1,0 +1,57 @@
+data:
+    lif_path: data/2025.07.24_right_after_seeding.lif
+    valid_idx: [8]
+    output_dir: data/out
+
+acquisition:
+    default_spacing_um: { dz: 1.0, dy: 1.0, dx: 1.0 }
+    preferred_timepoint: 0
+    preferred_channel: 0
+
+segmentation:
+    denoise_method: "none" # none|gaussian|tv|nlm|bilateral
+    denoise_params: {}
+    threshold: { method: "otsu" }
+    morphology: { open_radius: 3, close_radius: 0 }
+    min_voxels: 100
+    watershed:
+        {
+            enabled: true,
+            method: "hmax",
+            h: 1.0,
+            footprint: 3,
+            compactness: 0.0,
+        }
+    tissue_prior:
+        {
+            enabled: false,
+            mode: "normalize",
+            weight: 0.5,
+            norm_clip: [1.0, 99.0],
+        }
+    post_open_radius: 0
+    post_close_radius: 0
+    compute_density: true
+    density_sigma_um: 2.5
+    density_core_alpha: 1.5
+
+visualization:
+    enabled: true
+    render_3d: false
+    volume_mode: "translucent"
+    points_size: 10
+    tissue_opacity: 0.6
+    tissue_colormap: "magenta"
+    layers_to_show: ["ch0", "labels", "centroids", "density_prob"]
+    preview_downscale: 1
+
+memory:
+    image_dtype: "float16"
+    dist_dtype: "float32"
+    persist_dir: "data/out/_cache"
+    persist_large_arrays: true
+    large_threshold_mb: 64
+    use_zarr: false
+
+runtime:
+    log_level: "INFO"

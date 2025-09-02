@@ -1,14 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
 [project]
 name = "cellseg3d"
 version = "0.1.0"
-description = "Add your description here"
+description = "A 3D segmentation pipeline for confocal / electron microscopy LIF images"
 readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Cezar Sas" }]
+keywords = ["3D", "segmentation", "microscopy", "napari", "skimage"]
 requires-python = ">=3.13"
 dependencies = [
     "matplotlib>=3.10.6",
-    "napari[all]>=0.6.4",
+    "napari>=0.6.4",
     "pandas>=2.3.2",
     "pydantic-settings>=2.10.1",
+    "pyopengl-accelerate>=3.1.10",
+    "pyside6>=6.9.2",
+    "pywavelets>=1.9.0",
     "readlif>=0.6.6",
     "scikit-image>=0.25.2",
 ]
+
+[dependency-groups]
+dev = ["mypy>=1.17.1", "ruff>=0.12.11"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["cellseg3d"]
+
+[project.scripts]
+cellseg3d = "cellseg3d.cli:app"
+
+[tool.pyright]
+typeCheckingMode = "off"

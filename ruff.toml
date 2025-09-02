@@ -1,0 +1,56 @@
+line-length = 120
+indent-width = 4
+target-version = "py313"
+
+exclude = [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "venv",
+    ".nox",
+    ".ipynb_checkpoints",
+    "build",
+    "dist",
+    "buck-out",
+    "site-packages",
+    "__pypackages__",
+    ".idea",
+    ".vscode",
+    "LICENSE",
+]
+
+[lint]
+# Select
+select = ["E", "F", "I"]
+
+# Ignore line length violations.
+ignore = ["E501"]
+
+fixable = ["E", "F", "I"]
+
+# Forbid blanket noqa, mirror PyCharm’s inspection for suppressions
+extend-select = ["RUF100"]
+
+# Complexity budget
+[lint.mccabe]
+max-complexity = 10
+
+# Import sorting: Black-compatible, PyCharm-like
+[lint.isort]
+combine-as-imports = true
+force-wrap-aliases = true
+known-first-party = ["src"]
+
+# Contextual ignores
+[lint.per-file-ignores]
+"tests/**" = ["S101"]       # allow assert in tests
+"**/__init__.py" = ["F401"] # allow unused imports for package exports
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+docstring-code-format = true
