@@ -1,6 +1,6 @@
 data:
-    lif_path: data/2025.07.24_right_after_seeding.lif
-    valid_idx: [8]
+    lif_path: data/Project.lif
+    valid_idx: [2]
     output_dir: data/out
 
 acquisition:
@@ -12,15 +12,15 @@ segmentation:
     denoise_method: "none" # none|gaussian|tv|nlm|bilateral
     denoise_params: {}
     threshold: { method: "otsu" }
-    morphology: { open_radius: 3, close_radius: 0 }
+    morphology: { open_radius: 1, close_radius: 0 }
     min_voxels: 100
     watershed:
         {
             enabled: true,
             method: "hmax",
-            h: 1.0,
+            h: 0.75,
             footprint: 3,
-            compactness: 0.0,
+            compactness: 0.5,
         }
     tissue_prior:
         {
