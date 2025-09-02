@@ -6,19 +6,22 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "matplotlib>=3.10.6",
-    "napari[all]>=0.6.4",
+    "napari>=0.6.4",
     "pandas>=2.3.2",
     "pydantic-settings>=2.10.1",
+    "pyside6>=6.9.2",
     "readlif>=0.6.6",
     "scikit-image>=0.25.2",
 ]
 
 [dependency-groups]
-dev = [
-    "mypy>=1.17.1",
-    "ruff>=0.12.11",
-]
+dev = ["mypy>=1.17.1", "ruff>=0.12.11"]
 
+[tool.hatch.build.targets.wheel]
+packages = ["cellseg3d"]
+
+[project.scripts]
+cellseg3d = "cellseg3d.cli:app"
 
 [tool.pyright]
 typeCheckingMode = "off"

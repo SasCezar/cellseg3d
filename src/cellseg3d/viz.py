@@ -1,7 +1,7 @@
 import numpy as np
 import napari
 
-from settings import VisualizationCfg
+from .settings import VisualizationCfg
 
 
 def visualize(

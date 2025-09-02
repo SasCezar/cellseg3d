@@ -10,7 +10,7 @@ from skimage.morphology import ball, closing, h_maxima, opening, remove_small_ob
 from skimage.segmentation import watershed
 from skimage.segmentation import relabel_sequential
 
-from settings import SegmentationCfg, WatershedMethod
+from .settings import SegmentationCfg, WatershedMethod
 
 Spacing = Tuple[float, float, float]  # (dz, dy, dx)
 

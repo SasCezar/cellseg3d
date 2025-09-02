@@ -4,10 +4,10 @@ from pathlib import Path
 import numpy as np
 import typer
 
-from io_lif import iter_series_images, load_stack_zyx, spacing_um_from_img
-from segmentation import segment_3d
-from features import centroids_from_labels
-from settings import Settings
+from .io_lif import iter_series_images, load_stack_zyx, spacing_um_from_img
+from .segmentation import segment_3d
+from .features import centroids_from_labels
+from .settings import Settings
 
 app = typer.Typer(add_completion=False)
 
@@ -67,7 +67,7 @@ def run(config: Path = typer.Option(..., "--config", "-c", help="Path to config.
 
         if cfg.visualization.enabled:
             try:
-                from viz import visualize
+                from .viz import visualize
 
                 pts = df[["z_vox", "y_vox", "x_vox"]].to_numpy(dtype=np.float32) if len(df) else np.empty((0, 3))
                 visualize(
