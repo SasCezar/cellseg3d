@@ -24,12 +24,12 @@ exclude = [
 
 [lint]
 # Select
-select = ["E", "F"]
+select = ["E", "F", "I"]
 
 # Ignore line length violations.
 ignore = ["E501"]
 
-fixable = ["A", "B", "C", "D", "E", "F"]
+fixable = ["E", "F", "I"]
 
 # Forbid blanket noqa, mirror PyCharm’s inspection for suppressions
 extend-select = ["RUF100"]
@@ -42,7 +42,7 @@ max-complexity = 10
 [lint.isort]
 combine-as-imports = true
 force-wrap-aliases = true
-known-first-party = ["src", "app", "agoraai"]
+known-first-party = ["src"]
 
 # Contextual ignores
 [lint.per-file-ignores]

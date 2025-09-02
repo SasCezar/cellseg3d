@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -6,7 +8,6 @@ import yaml
 from pydantic import BaseModel, Field, PositiveInt, field_validator
 
 
-# Enums for clarity & typo protection
 class VolumeMode(str, Enum):
     translucent = "translucent"
     mip = "mip"
@@ -19,7 +20,6 @@ class WatershedMethod(str, Enum):
     peaks = "peaks"
 
 
-# Acquisition settings
 class Spacing(BaseModel):
     dz: float = Field(..., gt=0)
     dy: float = Field(..., gt=0)
@@ -34,27 +34,27 @@ class DataCfg(BaseModel):
     @field_validator("lif_path")
     @classmethod
     def lif_exists(cls, v: Path) -> Path:
-        if not v.exists():
-            raise ValueError(f"LIF file not found: {v}")
+        # Soft-validate: allow missing during packaging; warn later in runtime
         return v
 
 
 class AcquisitionCfg(BaseModel):
     default_spacing_um: Spacing
+    preferred_timepoint: int = 0
+    preferred_channel: int = 0
 
 
-# Segmentation settings
 class ThresholdCfg(BaseModel):
-    method: str = "otsu"  # 'otsu'|'yen'|'li'|'triangle'|'percentile'
-    percentile: float = 99.0  # used if method == 'percentile'
+    method: str = "otsu"
+    percentile: float = 99.0
 
 
 class TissuePriorCfg(BaseModel):
     enabled: bool = False
-    mode: str = "normalize"  # 'normalize' | 'threshold'
+    mode: str = "normalize"
     weight: float = 0.5
-    norm_clip: Tuple[float, float] = (1.0, 99.0)  # only used in 'normalize'
-    threshold_method: str = "yen"  # used if mode == 'threshold'
+    norm_clip: Tuple[float, float] = (1.0, 99.0)
+    threshold_method: str = "yen"
     threshold_percentile: float = 95.0
 
 
@@ -72,28 +72,23 @@ class WatershedCfg(BaseModel):
 
 
 class SegmentationCfg(BaseModel):
-    # --- denoising ---
     denoise_method: str = "none"
     denoise_params: dict = {}
-    # --- thresholding ---
     threshold: ThresholdCfg = ThresholdCfg()
 
-    # --- morphology ---
     min_voxels: PositiveInt = 50
     morphology: MorphologyCfg = MorphologyCfg()
-
-    # --- watershed ---
     watershed: WatershedCfg = WatershedCfg()
-
-    # --- tissue prior ---
     tissue_prior: Optional[TissuePriorCfg] = TissuePriorCfg()
-
-    # --- post cleanup ---
     post_open_radius: int = 0
     post_close_radius: int = 0
 
+    # extras
+    compute_density: bool = False
+    density_sigma_um: float = 2.5
+    density_core_alpha: float = 1.5
 
-# Visualization settings
+
 class SurfaceCfg(BaseModel):
     make: bool = False
     smoothing: float = 1.0
@@ -109,25 +104,32 @@ class VisualizationCfg(BaseModel):
     volume_mode: VolumeMode = VolumeMode.translucent
     surface: SurfaceCfg = SurfaceCfg()
 
-    # optional: add fields for tissue overlay styling
     tissue_opacity: float = 0.6
     tissue_colormap: str = "magenta"
 
-    show_debug_layers: bool = True  # show intermediates in napari
-    save_debug_npz: bool = False  # save intermediates to disk
+    layers_to_show: List[str] = ["ch0", "labels", "centroids"]
+    preview_downscale: int = 1
 
 
-# Runtime settings
+class MemoryCfg(BaseModel):
+    image_dtype: str = "float16"
+    dist_dtype: str = "float32"
+    persist_dir: Path = Path("data/out/_cache")
+    persist_large_arrays: bool = True
+    large_threshold_mb: int = 64
+    use_zarr: bool = False
+
+
 class RuntimeCfg(BaseModel):
     log_level: str = "INFO"
 
 
-# Root settings object
 class Settings(BaseModel):
     data: DataCfg
     acquisition: AcquisitionCfg
     segmentation: SegmentationCfg
     visualization: VisualizationCfg
+    memory: MemoryCfg
     runtime: RuntimeCfg = RuntimeCfg()
 
     @classmethod

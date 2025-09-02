@@ -5,10 +5,7 @@ import pandas as pd
 from skimage.measure import regionprops
 
 
-def centroids_from_labels(
-    labels: np.ndarray,
-    spacing_um: Tuple[float, float, float],
-) -> pd.DataFrame:
+def centroids_from_labels(labels: np.ndarray, spacing_um: Tuple[float, float, float]) -> pd.DataFrame:
     dz, dy, dx = spacing_um
     rows = []
     for p in regionprops(labels):
