@@ -8,7 +8,7 @@
 **cellseg3d** is a memory-optimized 3D segmentation pipeline for **confocal / electron microscopy** LIF datasets (Leica `.lif`), built with modern Python tools.
 
 It provides reproducible segmentation of nuclei or cells, handles large 3D stacks efficiently, and integrates tightly with **Napari** for visualization.
-The second channel can optionally serve as a **tissue/edge prior** to refine watershed splitting of touching cells.
+Additionally, the second channel can optionally serve as a **tissue/edge prior** to refine watershed splitting of touching cells.
 
 ---
 
@@ -22,7 +22,7 @@ The second channel can optionally serve as a **tissue/edge prior** to refine wat
 -   Watershed-based splitting of touching cells.
 -   Export **centroids** to CSV with voxel & µm coordinates.
 -   Optional **density maps** (KDE-like probability fields).
--   Memory-aware **DebugStore** (large intermediates stored as NPZ/Zarr).
+-   Memory-aware **DebugStore** (large intermediates stored as NPZ).
 -   Flexible visualization with **Napari**, controlled entirely by YAML config.
 
 ---
