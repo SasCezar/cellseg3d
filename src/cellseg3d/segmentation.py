@@ -1,44 +1,45 @@
-from typing import Tuple, Optional
+
+from dataclasses import dataclass
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
 from scipy import ndimage as ndi
 from skimage.feature import peak_local_max
-from skimage.filters import (
-    threshold_otsu,
-    threshold_yen,
-    threshold_li,
-    threshold_triangle,
-    gaussian,
-)
+from skimage.filters import threshold_otsu, threshold_yen, threshold_li, threshold_triangle
 from skimage.measure import label as cc_label
-from skimage.morphology import (
-    ball,
-    closing,
-    opening,
-    remove_small_objects,
-    binary_opening,
-    binary_closing,
-    h_maxima,
-)
+from skimage.morphology import ball, closing, opening, remove_small_objects, binary_opening, binary_closing, h_maxima
 from skimage.segmentation import watershed, relabel_sequential
+from enum import Enum
+from skimage.restoration import denoise_tv_chambolle, denoise_nl_means, estimate_sigma, denoise_bilateral
 
-# NOTE: we keep type imports loose to avoid tight coupling to enums.
-# If you already have enums in settings.py, this still works.
-from .settings import SegmentationCfg  # your existing Pydantic config model
 
-# -----------------------------
-# Single place to control dtype
-# -----------------------------
-IMAGE_DTYPE = np.float16  # <--- flip here if you want float32 again
-DIST_DTYPE = np.float32  # keep distance math stable
+from .settings import SegmentationCfg
+
+# ---- central numeric control ----
+IMAGE_DTYPE = np.float32
+DIST_DTYPE = np.float32
 
 Spacing = Tuple[float, float, float]  # (dz, dy, dx)
 
 
-# -----------------------------
-# Utilities
-# -----------------------------
+class DenoiseMethod(str, Enum):
+    none = "none"
+    gaussian = "gaussian"
+    tv = "tv"
+    nlm = "nlm"
+    bilateral = "bilateral"
+    wavelet = "wavelet"
+
+
+@dataclass
+class SegmentResult:
+    bw: np.ndarray
+    labels: np.ndarray
+    debug: Dict[str, np.ndarray | float]  # intermediates and scalars
+
+
+# ---------- helpers (unchanged from earlier refactor, trimmed for brevity) ----------
 def _robust_normalize(x: np.ndarray, p_lo=1.0, p_hi=99.0) -> np.ndarray:
     lo, hi = np.percentile(x, [p_lo, p_hi])
     if hi <= lo:
@@ -47,15 +48,46 @@ def _robust_normalize(x: np.ndarray, p_lo=1.0, p_hi=99.0) -> np.ndarray:
     return y.astype(IMAGE_DTYPE, copy=False)
 
 
-def _maybe_denoise(vol: np.ndarray, sigma: float, median_size: int) -> np.ndarray:
-    y = vol
-    if sigma and sigma > 0:
-        y = gaussian(y, sigma=float(sigma), preserve_range=True)
-        y = y.astype(IMAGE_DTYPE, copy=False)
-    if median_size and median_size > 1:
-        y = ndi.median_filter(y, size=int(median_size))
-        y = y.astype(IMAGE_DTYPE, copy=False)
-    return y
+def _maybe_denoise(vol, method: str, params: dict, spacing_um):
+    m = (method or "none").lower()
+    if m == "none":
+        return vol
+    if m == "gaussian":
+        from scipy.ndimage import gaussian_filter
+
+        dy, dx = spacing_um[1], spacing_um[2]
+        dz = spacing_um[0]
+        tgt = float(params.get("target_um", 0.6))
+        sig = (tgt / dz, tgt / dy, tgt / dx)  # physical 0.6 µm
+        vol32 = vol.astype(np.float32, copy=False)  # <--- cast up
+        den = gaussian_filter(vol32, sigma=sig)
+        return den.astype(vol.dtype, copy=False)  # <--- cast back to float16
+    if m == "tv":
+        w = float(params.get("weight", 0.05))
+        return denoise_tv_chambolle(vol, weight=w, channel_axis=None).astype(vol.dtype, copy=False)
+    if m == "nlm":
+        sigma_est = estimate_sigma(vol, channel_axis=None)
+        h = float(params.get("h", 0.8 * sigma_est))
+        ps = int(params.get("patch_size", 3))
+        pd = int(params.get("patch_distance", 5))
+        return denoise_nl_means(
+            vol, h=h, patch_size=ps, patch_distance=pd, fast_mode=True, channel_axis=None, preserve_range=True
+        ).astype(vol.dtype, copy=False)
+    if m == "bilateral":
+        sc = float(params.get("sigma_color", 0.1))
+        ss = float(params.get("sigma_spatial", 1.5))
+        return denoise_bilateral(vol, sigma_color=sc, sigma_spatial=ss, channel_axis=None).astype(vol.dtype, copy=False)
+    if m == "wavelet":
+        from skimage.restoration import denoise_wavelet
+
+        return denoise_wavelet(
+            vol,
+            method=params.get("method", "BayesShrink"),
+            mode=params.get("mode", "soft"),
+            rescale_sigma=True,
+            channel_axis=None,
+        ).astype(vol.dtype, copy=False)
+    return vol
 
 
 def _threshold_scalar(vol: np.ndarray, method: str, percentile: float) -> float:
@@ -69,18 +101,11 @@ def _threshold_scalar(vol: np.ndarray, method: str, percentile: float) -> float:
     if m == "triangle":
         return float(threshold_triangle(vol))
     if m == "percentile":
-        pc = float(np.clip(percentile, 0, 100))
-        return float(np.percentile(vol, pc))
-    # fallback
+        return float(np.percentile(vol, float(np.clip(percentile, 0, 100))))
     return float(threshold_otsu(vol))
 
 
-def _postprocess_binary(
-    bw: np.ndarray,
-    min_voxels: int,
-    post_open_radius: int,
-    post_close_radius: int,
-) -> np.ndarray:
+def _postprocess_binary(bw: np.ndarray, min_voxels: int, post_open_radius: int, post_close_radius: int) -> np.ndarray:
     if post_open_radius and post_open_radius > 0:
         bw = binary_opening(bw, ball(int(post_open_radius)))
     if post_close_radius and post_close_radius > 0:
@@ -92,47 +117,36 @@ def _postprocess_binary(
 
 def _anisotropic_distance(bw: np.ndarray, spacing_um: Spacing) -> np.ndarray:
     dz, dy, dx = spacing_um
-    dist = ndi.distance_transform_edt(bw, sampling=(dz, dy, dx))
-    return dist.astype(DIST_DTYPE, copy=False)
+    return ndi.distance_transform_edt(bw, sampling=(dz, dy, dx)).astype(DIST_DTYPE, copy=False)
 
 
 def _seed_markers(
-    bw: npt.NDArray[np.bool_],
-    distance: npt.NDArray[np.float32],
-    cfg: SegmentationCfg,
-    spacing_um: Spacing,
+    bw: npt.NDArray[np.bool_], distance: npt.NDArray[np.float32], cfg: SegmentationCfg, spacing_um: Spacing
 ) -> np.ndarray:
     method = getattr(cfg.watershed, "method", "hmax")
     m = (method.value if hasattr(method, "value") else str(method)).lower()
-
     if m == "hmax":
         dz, dy, dx = spacing_um
-        mu_per_vox = float(dz + dy + dx) / 3.0
-        h_val = float(getattr(cfg.watershed, "h", 1.0)) * mu_per_vox
-        seeds = h_maxima(distance, h=h_val)
+        mu_per_vox = (dz + dy + dx) / 3.0
+        seeds = h_maxima(distance, h=float(getattr(cfg.watershed, "h", 1.0)) * float(mu_per_vox))
         markers, _ = ndi.label(seeds)
         return markers
 
-    # peaks
     fp = int(max(1, getattr(cfg.watershed, "footprint", 3)))
-    coords = peak_local_max(
-        distance,
-        labels=bw,
-        footprint=np.ones((fp, fp, fp), dtype=bool),
-        exclude_border=False,
-    )
+    coords = peak_local_max(distance, labels=bw, footprint=np.ones((fp, fp, fp), dtype=bool), exclude_border=False)
     seed_mask = np.zeros_like(bw, dtype=bool)
     if coords.size:
         seed_mask[tuple(coords.T)] = True
     markers, _ = ndi.label(seed_mask)
+
     return markers
 
 
 def _apply_tissue_prior(
-    elevation: np.ndarray,  # elevation for watershed (low = basins)
-    tissue: Optional[np.ndarray],  # channel-1 volume
+    elevation: np.ndarray,
+    tissue: Optional[np.ndarray],
     *,
-    mode: str,  # "normalize" | "threshold"
+    mode: str,
     weight: float,
     norm_clip: tuple[float, float],
     thr_method: str,
@@ -140,121 +154,96 @@ def _apply_tissue_prior(
 ) -> np.ndarray:
     if tissue is None or weight <= 0:
         return elevation
-
     if mode == "normalize":
         t_norm = _robust_normalize(
-            tissue.astype(IMAGE_DTYPE, copy=False),
-            p_lo=float(norm_clip[0]),
-            p_hi=float(norm_clip[1]),
+            tissue.astype(IMAGE_DTYPE, copy=False), p_lo=float(norm_clip[0]), p_hi=float(norm_clip[1])
         )
-        return (elevation.astype(DIST_DTYPE, copy=False) + weight * t_norm.astype(DIST_DTYPE)).astype(
-            DIST_DTYPE, copy=False
-        )
-
+        return (elevation.astype(DIST_DTYPE) + weight * t_norm.astype(DIST_DTYPE)).astype(DIST_DTYPE)
     if mode == "threshold":
-        # Build a 'hard' ridge: add weight where tissue > threshold
         t = tissue.astype(IMAGE_DTYPE, copy=False)
         t_thr = _threshold_scalar(t, thr_method, thr_percentile)
         ridge = (t > t_thr).astype(DIST_DTYPE, copy=False)
-        return (elevation.astype(DIST_DTYPE, copy=False) + weight * ridge).astype(DIST_DTYPE, copy=False)
-
-    # unknown mode -> no-op
+        return (elevation.astype(DIST_DTYPE) + weight * ridge).astype(DIST_DTYPE)
     return elevation
 
 
-# -----------------------------
-# Public API (single orchestrator)
-# -----------------------------
+# ----------------- public API: return SegmentResult with debug dict -----------------
 def segment_3d(
     volume_main: npt.NDArray[np.generic],
     spacing_um: Spacing,
     cfg: SegmentationCfg,
     *,
-    volume_tissue: Optional[np.ndarray] = None,  # pass channel-1 here if available
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    High-level segmentation:
-      1) preprocess (denoise)
-      2) threshold (configurable)
-      3) morphology + small object removal
-      4) optional watershed with anisotropic distance
-         (optionally steered by a tissue channel prior in 'normalize' or 'threshold' mode)
-    Returns: (binary_mask, labels)
-    """
+    volume_tissue: Optional[np.ndarray] = None,
+) -> SegmentResult:
+    dbg: Dict[str, np.ndarray | float] = {}
 
-    # --- 1) Preprocess ---
+    # 1) preprocess
     vol = volume_main.astype(IMAGE_DTYPE, copy=False)
-    denoise_sigma = float(getattr(cfg, "denoise_sigma", 0.0))
-    median_size = int(getattr(cfg, "median_size", 0))
-    vol = _maybe_denoise(vol, sigma=denoise_sigma, median_size=median_size)
+    vol = _maybe_denoise(
+        vol,
+        method=getattr(cfg, "denoise_method", "none"),
+        params=getattr(cfg, "denoise_params", {}),
+        spacing_um=spacing_um,
+    )
+    dbg["vol_denoised"] = vol
 
-    # --- 2) Threshold ---
+    # 2) threshold
     thr_cfg = getattr(cfg, "threshold", None)
-    thr_method = "otsu"
-    thr_percentile = 99.0
-    if thr_cfg is not None:
-        thr_method = str(getattr(thr_cfg, "method", "otsu"))
-        thr_percentile = float(getattr(thr_cfg, "percentile", 99.0))
-
-    th = _threshold_scalar(vol, method=thr_method, percentile=thr_percentile)
+    t_method = "otsu" if thr_cfg is None else str(getattr(thr_cfg, "method", "otsu"))
+    t_pc = 99.0 if thr_cfg is None else float(getattr(thr_cfg, "percentile", 99.0))
+    th = _threshold_scalar(vol, t_method, t_pc)
+    dbg["th_value"] = float(th)
     bw = vol > th
+    dbg["bw_raw"] = bw.astype(np.uint8, copy=False)
 
-    # --- 3) Morphology (pre-watershed clean up) ---
-    # primary open/close
+    # 3) morphology pre-watershed
     if getattr(cfg.morphology, "open_radius", 0):
         bw = opening(bw, ball(int(cfg.morphology.open_radius)))
     if getattr(cfg.morphology, "close_radius", 0):
         bw = closing(bw, ball(int(cfg.morphology.close_radius)))
+    dbg["bw_morph"] = bw.astype(np.uint8, copy=False)
 
-    # speckle cleanup + optional extra open/close
-    post_open_radius = int(getattr(cfg, "post_open_radius", 0))
-    post_close_radius = int(getattr(cfg, "post_close_radius", 0))
+    # post cleanup
     bw = _postprocess_binary(
         bw,
         min_voxels=int(getattr(cfg, "min_voxels", 50)),
-        post_open_radius=post_open_radius,
-        post_close_radius=post_close_radius,
+        post_open_radius=int(getattr(cfg, "post_open_radius", 0)),
+        post_close_radius=int(getattr(cfg, "post_close_radius", 0)),
     )
+    dbg["bw_post"] = bw.astype(np.uint8, copy=False)
 
-    # Early exit if watershed disabled or nothing to do
+    # early return if watershed disabled
     labels = cc_label(bw, connectivity=3)
-    ws_enabled = bool(getattr(cfg.watershed, "enabled", True))
-    if (not ws_enabled) or (not np.any(bw)):
-        return bw, labels
+    if not bool(getattr(cfg.watershed, "enabled", True)) or not np.any(bw):
+        return SegmentResult(bw=bw, labels=labels, debug=dbg)
 
-    # --- 4) Watershed splitting ---
+    # 4) watershed
     distance = _anisotropic_distance(bw, spacing_um)
-    elevation = -distance  # basins at object centers
+    elevation = -distance
+    dbg["distance"] = distance
+    dbg["elevation_pre_prior"] = elevation
 
-    # Optional tissue prior
-    tp_cfg = getattr(cfg, "tissue_prior", None)
-    if tp_cfg is not None and bool(getattr(tp_cfg, "enabled", False)):
-        mode = str(getattr(tp_cfg, "mode", "normalize")).lower()
-        weight = float(getattr(tp_cfg, "weight", 0.5))
-        norm_clip = tuple(getattr(tp_cfg, "norm_clip", (1.0, 99.0)))
-        t_thr_method = str(getattr(tp_cfg, "threshold_method", "yen"))
-        t_thr_percentile = float(getattr(tp_cfg, "threshold_percentile", 95.0))
-
+    tp = getattr(cfg, "tissue_prior", None)
+    if tp is not None and bool(getattr(tp, "enabled", False)):
         elevation = _apply_tissue_prior(
             elevation=elevation,
             tissue=volume_tissue,
-            mode=mode,
-            weight=weight,
-            norm_clip=norm_clip,
-            thr_method=t_thr_method,
-            thr_percentile=t_thr_percentile,
+            mode=str(getattr(tp, "mode", "normalize")).lower(),
+            weight=float(getattr(tp, "weight", 0.5)),
+            norm_clip=tuple(getattr(tp, "norm_clip", (1.0, 99.0))),
+            thr_method=str(getattr(tp, "threshold_method", "yen")),
+            thr_percentile=float(getattr(tp, "threshold_percentile", 95.0)),
         )
+    dbg["elevation"] = elevation
 
     markers = _seed_markers(bw, distance, cfg, spacing_um)
+    dbg["markers"] = markers.astype(np.int32, copy=False)
 
     labels = watershed(
-        elevation,  # negative distance (+ optional prior)
-        markers=markers,
-        mask=bw,
-        compactness=float(getattr(cfg.watershed, "compactness", 0.0)),
+        elevation, markers=markers, mask=bw, compactness=float(getattr(cfg.watershed, "compactness", 0.0))
     )
 
-    # Final small basin cleanup & relabel
+    # final cleanup
     min_vox = int(getattr(cfg, "min_voxels", 50))
     if min_vox > 1:
         sizes = np.bincount(labels.ravel())
@@ -264,4 +253,5 @@ def segment_3d(
             labels[np.isin(labels, small)] = 0
         labels, _, _ = relabel_sequential(labels)
 
-    return bw, labels
+    dbg["labels"] = labels.astype(np.int32, copy=False)
+    return SegmentResult(bw=bw, labels=labels, debug=dbg)

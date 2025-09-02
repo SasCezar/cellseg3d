@@ -1,6 +1,6 @@
 data:
-    lif_path: "/home/sasce/PycharmProjects/cellseg3d/data/Project.lif"
-    valid_idx: [2, 4, 5]
+    lif_path: "/home/sasce/PycharmProjects/cellseg3d/data/2025.07.24_right_after_seeding.lif"
+    valid_idx: [8]
     output_dir: "/home/sasce/PycharmProjects/cellseg3d/data/out/"
 
 acquisition:
@@ -12,9 +12,13 @@ acquisition:
         dx: 1.0
 
 segmentation:
-    # -------- denoise (pre-threshold) --------
-    denoise_sigma: 0.5 # 0 disables gaussian denoise
-    median_size: 0 # 0 disables; try 3 for speckle-y data
+    denoise_method: "gaussian" # "tv" | "nlm" | "bilateral" | "gaussian" | "wavelet" | "none"
+    denoise_params:
+        patch_size: 3        # example for NLM
+        patch_distance: 5
+        sigma_color: 0.1     # example for bilateral
+        target_um: 0.6       # example for Gaussian
+
 
     # -------- threshold (for the cell channel) --------
     threshold:
@@ -51,7 +55,7 @@ segmentation:
 visualization:
     enabled: true
     show_labels: true
-    points_size: 5
+    points_size: 10
     render_3d: false
     volume_mode: "translucent" # translucent|mip|attenuated_mip|additive
     surface:

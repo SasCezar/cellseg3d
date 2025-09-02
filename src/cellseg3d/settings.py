@@ -81,10 +81,9 @@ class WatershedCfg(BaseModel):
 
 
 class SegmentationCfg(BaseModel):
-    # --- preprocessing ---
-    denoise_sigma: float = 0.0  # gaussian sigma; 0 disables
-    median_size: int = 0  # median filter size; 0 disables
-
+    # --- denoising ---
+    denoise_method: str = "none"
+    denoise_params: dict = {}
     # --- thresholding ---
     threshold: ThresholdCfg = ThresholdCfg()
 
@@ -124,6 +123,9 @@ class VisualizationCfg(BaseModel):
     # optional: add fields for tissue overlay styling
     tissue_opacity: float = 0.6
     tissue_colormap: str = "magenta"
+
+    show_debug_layers: bool = True  # show intermediates in napari
+    save_debug_npz: bool = False  # save intermediates to disk
 
 
 # ---------------------
