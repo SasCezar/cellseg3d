@@ -1,11 +1,15 @@
+from __future__ import annotations
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import yaml
 from pydantic import BaseModel, Field, PositiveInt, field_validator
 
 
+# -----------------------------------
+# Enums for clarity & typo protection
+# -----------------------------------
 class VolumeMode(str, Enum):
     translucent = "translucent"
     mip = "mip"
@@ -18,6 +22,9 @@ class WatershedMethod(str, Enum):
     peaks = "peaks"
 
 
+# ---------------------
+# Acquisition settings
+# ---------------------
 class Spacing(BaseModel):
     dz: float = Field(..., gt=0)
     dy: float = Field(..., gt=0)
@@ -43,6 +50,23 @@ class AcquisitionCfg(BaseModel):
     default_spacing_um: Spacing
 
 
+# ---------------------
+# Segmentation settings
+# ---------------------
+class ThresholdCfg(BaseModel):
+    method: str = "otsu"  # 'otsu'|'yen'|'li'|'triangle'|'percentile'
+    percentile: float = 99.0  # used if method == 'percentile'
+
+
+class TissuePriorCfg(BaseModel):
+    enabled: bool = False
+    mode: str = "normalize"  # 'normalize' | 'threshold'
+    weight: float = 0.5
+    norm_clip: Tuple[float, float] = (1.0, 99.0)  # only used in 'normalize'
+    threshold_method: str = "yen"  # used if mode == 'threshold'
+    threshold_percentile: float = 95.0
+
+
 class MorphologyCfg(BaseModel):
     open_radius: int = 1
     close_radius: int = 0
@@ -57,13 +81,33 @@ class WatershedCfg(BaseModel):
 
 
 class SegmentationCfg(BaseModel):
+    # --- preprocessing ---
+    denoise_sigma: float = 0.0  # gaussian sigma; 0 disables
+    median_size: int = 0  # median filter size; 0 disables
+
+    # --- thresholding ---
+    threshold: ThresholdCfg = ThresholdCfg()
+
+    # --- morphology ---
     min_voxels: PositiveInt = 50
     morphology: MorphologyCfg = MorphologyCfg()
+
+    # --- watershed ---
     watershed: WatershedCfg = WatershedCfg()
 
+    # --- tissue prior ---
+    tissue_prior: Optional[TissuePriorCfg] = TissuePriorCfg()
 
+    # --- post cleanup ---
+    post_open_radius: int = 0
+    post_close_radius: int = 0
+
+
+# ---------------------
+# Visualization settings
+# ---------------------
 class SurfaceCfg(BaseModel):
-    make: bool = True
+    make: bool = False
     smoothing: float = 1.0
     level: float = 0.5
     downsample: int = 1
@@ -73,15 +117,25 @@ class VisualizationCfg(BaseModel):
     enabled: bool = True
     show_labels: bool = True
     points_size: int = Field(6, gt=0)
-    render_3d: bool = True
-    volume_mode: VolumeMode = VolumeMode.attenuated_mip
+    render_3d: bool = False
+    volume_mode: VolumeMode = VolumeMode.translucent
     surface: SurfaceCfg = SurfaceCfg()
 
+    # optional: add fields for tissue overlay styling
+    tissue_opacity: float = 0.6
+    tissue_colormap: str = "magenta"
 
+
+# ---------------------
+# Runtime settings
+# ---------------------
 class RuntimeCfg(BaseModel):
     log_level: str = "INFO"
 
 
+# ---------------------
+# Root settings object
+# ---------------------
 class Settings(BaseModel):
     data: DataCfg
     acquisition: AcquisitionCfg

@@ -48,7 +48,8 @@ def run(config: Path = typer.Option(..., "--config", "-c", help="Path to config.
         t = int(np.clip(cfg.acquisition.preferred_timepoint, 0, max(0, t_dim - 1)))
         c = int(np.clip(cfg.acquisition.preferred_channel, 0, max(0, c_dim - 1)))
 
-        volume = load_stack_zyx(img, t=t, c=c)
+        vol0 = load_stack_zyx(img, t=t, c=0)
+        vol1 = load_stack_zyx(img, t=t, c=1)
 
         dz, dy, dx = spacing_um_from_img(img)
         dz = dz or cfg.acquisition.default_spacing_um.dz
@@ -56,14 +57,19 @@ def run(config: Path = typer.Option(..., "--config", "-c", help="Path to config.
         dx = dx or cfg.acquisition.default_spacing_um.dx
         spacing = (dz, dy, dx)
 
-        bw, labels = segment_3d(volume, spacing, cfg.segmentation)
+        bw, labels = segment_3d(
+            volume_main=vol0,
+            spacing_um=spacing,
+            cfg=cfg.segmentation,
+            volume_tissue=vol1,  # <-- new
+        )
         df = centroids_from_labels(labels, spacing)
 
         safe = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in str(name))
         csv_path = out_dir / f"{idx:03d}_{safe}_centroids.csv"
         df.to_csv(csv_path, index=False)
 
-        log.info("[%03d] %s: ZYX %s | found %d cells | saved -> %s", idx, name, tuple(volume.shape), len(df), csv_path)
+        log.info("[%03d] %s: ZYX %s | found %d cells | saved -> %s", idx, name, tuple(vol0.shape), len(df), csv_path)
 
         if cfg.visualization.enabled:
             try:
@@ -71,11 +77,12 @@ def run(config: Path = typer.Option(..., "--config", "-c", help="Path to config.
 
                 pts = df[["z_vox", "y_vox", "x_vox"]].to_numpy(dtype=np.float32) if len(df) else np.empty((0, 3))
                 visualize(
-                    volume,
+                    vol0,
                     labels if cfg.visualization.show_labels else None,
                     pts,
                     f"{idx:03d} - {name}",
                     cfg.visualization,
+                    volume_tissue=vol1,
                 )
             except Exception as e:
                 log.warning("Visualization failed: %s", e, exc_info=True)

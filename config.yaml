@@ -12,23 +12,48 @@ acquisition:
         dx: 1.0
 
 segmentation:
-    min_voxels: 100
+    # -------- denoise (pre-threshold) --------
+    denoise_sigma: 0.5 # 0 disables gaussian denoise
+    median_size: 0 # 0 disables; try 3 for speckle-y data
+
+    # -------- threshold (for the cell channel) --------
+    threshold:
+        method: "otsu" # 'otsu'|'yen'|'li'|'triangle'|'percentile'
+        percentile: 99.2 # only used if method == 'percentile'
+
+    # -------- morphology (pre-watershed) --------
+    min_voxels: 100 # remove objects smaller than this (voxels)
     morphology:
         open_radius: 1
         close_radius: 0
+
+    # -------- tissue prior (channel-1) to steer watershed --------
+    tissue_prior:
+        enabled: true
+        mode: "normalize" # 'normalize' | 'threshold'
+        weight: 0.8 # higher => stronger ridge along tissue
+        norm_clip: [1.0, 99.0] # only used in 'normalize' mode
+        threshold_method: "yen" # used in 'threshold' mode
+        threshold_percentile: 95.0 # used in 'threshold' mode
+
+    # -------- watershed (splitting) --------
     watershed:
         enabled: true
-        method: "hmax" # hmax | peaks
+        method: "hmax" # 'hmax' | 'peaks'
         h: 0.75
         footprint: 3
         compactness: 0.5
+
+    # -------- extra cleanup after binarization --------
+    post_open_radius: 1
+    post_close_radius: 0
 
 visualization:
     enabled: true
     show_labels: true
     points_size: 5
     render_3d: false
-    volume_mode: "translucent" # translucent | mip | attenuated_mip | additive
+    volume_mode: "translucent" # translucent|mip|attenuated_mip|additive
     surface:
         make: false
         smoothing: 1.0
@@ -36,4 +61,4 @@ visualization:
         downsample: 1
 
 runtime:
-    log_level: "INFO" # DEBUG|INFO|WARNING|ERROR
+    log_level: "INFO"
