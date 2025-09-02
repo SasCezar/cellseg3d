@@ -1,0 +1,39 @@
+data:
+    lif_path: "/home/sasce/PycharmProjects/cellseg3d/data/Project.lif"
+    valid_idx: [2, 4, 5]
+    output_dir: "/home/sasce/PycharmProjects/cellseg3d/data/out/"
+
+acquisition:
+    preferred_channel: 0
+    preferred_timepoint: 0
+    default_spacing_um:
+        dz: 1.0
+        dy: 1.0
+        dx: 1.0
+
+segmentation:
+    min_voxels: 100
+    morphology:
+        open_radius: 1
+        close_radius: 0
+    watershed:
+        enabled: true
+        method: "hmax" # hmax | peaks
+        h: 0.75
+        footprint: 3
+        compactness: 0.5
+
+visualization:
+    enabled: true
+    show_labels: true
+    points_size: 5
+    render_3d: false
+    volume_mode: "translucent" # translucent | mip | attenuated_mip | additive
+    surface:
+        make: false
+        smoothing: 1.0
+        level: 0.5
+        downsample: 1
+
+runtime:
+    log_level: "INFO" # DEBUG|INFO|WARNING|ERROR
