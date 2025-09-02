@@ -12,3 +12,13 @@ dependencies = [
     "readlif>=0.6.6",
     "scikit-image>=0.25.2",
 ]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.17.1",
+    "ruff>=0.12.11",
+]
+
+
+[tool.pyright]
+typeCheckingMode = "off"

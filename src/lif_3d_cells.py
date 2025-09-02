@@ -21,7 +21,6 @@ from skimage.measure import label as cc_label
 import napari
 
 
-
 # Settings
 class Spacing(BaseModel):
     dz: float = Field(..., gt=0)
@@ -53,9 +52,7 @@ class Settings(BaseModel):
     points_size: int = Field(6, gt=0)
 
     render_3d: bool = True
-    volume_mode: str = (
-        "attenuated_mip"  # 'translucent' | 'mip' | 'attenuated_mip' | 'additive'
-    )
+    volume_mode: str = "attenuated_mip"  # 'translucent' | 'mip' | 'attenuated_mip' | 'additive'
     make_surface: bool = True
     surface_smoothing: float = 1.0
     surface_level: float = 0.5
@@ -75,7 +72,6 @@ class Settings(BaseModel):
         return cls(**data)
 
 
-
 # Helper functions
 def ensure_output_dir(cfg: Settings, lif_path: Path) -> Path:
     if cfg.output_dir:
@@ -86,7 +82,7 @@ def ensure_output_dir(cfg: Settings, lif_path: Path) -> Path:
     return out
 
 
-def get_spacing_um(img) -> Tuple[float, float, float]:
+def get_spacing_um(img) -> Tuple[float | None, float | None, float | None]:
     """
     Your reader exposes `image.scale` as px/µm for (x, y, z) and images/sec for t.
     We invert to get µm/px for spatial axes. If any missing, fall back to defaults.
@@ -212,9 +208,7 @@ def segment_3d(
     return bw, labels
 
 
-def centroids_from_mask(
-    bw: np.ndarray, spacing_um: Tuple[float, float, float]
-) -> tuple[pd.DataFrame, np.ndarray]:
+def centroids_from_mask(bw: np.ndarray, spacing_um: Tuple[float, float, float]) -> tuple[pd.DataFrame, np.ndarray]:
     dz, dy, dx = spacing_um
     lab = label(bw, connectivity=3)
     props = regionprops(lab)
@@ -257,9 +251,7 @@ def visualize(
         contrast_limits=(np.percentile(volume, 1), np.percentile(volume, 99)),
     )
     if cfg.render_3d:
-        img_kwargs["rendering"] = (
-            cfg.volume_mode
-        )  # 'mip'|'translucent'|'attenuated_mip'|'additive'
+        img_kwargs["rendering"] = cfg.volume_mode  # 'mip'|'translucent'|'attenuated_mip'|'additive'
         img_kwargs["depiction"] = "volume"  # 3D
     else:
         img_kwargs["rendering"] = "mip"  # harmless in 2D
@@ -291,9 +283,7 @@ def visualize(
 
             surf_src = labels.astype(float)
             if cfg.surface_smoothing and cfg.surface_smoothing > 0:
-                surf_src = gaussian(
-                    surf_src, sigma=cfg.surface_smoothing, preserve_range=True
-                )
+                surf_src = gaussian(surf_src, sigma=cfg.surface_smoothing, preserve_range=True)
 
             if cfg.downsample_for_surface and cfg.downsample_for_surface > 1:
                 s = int(cfg.downsample_for_surface)
@@ -302,9 +292,7 @@ def visualize(
             else:
                 voxel_scale = np.array([1.0, 1.0, 1.0], dtype=float)
 
-            verts, faces, normals, values = marching_cubes(
-                surf_src, level=cfg.surface_level, allow_degenerate=False
-            )
+            verts, faces, normals, values = marching_cubes(surf_src, level=cfg.surface_level, allow_degenerate=False)
             verts = verts * voxel_scale
 
             viewer.add_surface(
@@ -327,9 +315,7 @@ def visualize(
     napari.run()
 
 
-def centroids_from_labels(
-    labels: np.ndarray, spacing_um: tuple[float, float, float]
-) -> pd.DataFrame:
+def centroids_from_labels(labels: np.ndarray, spacing_um: tuple[float, float, float]) -> pd.DataFrame:
     dz, dy, dx = spacing_um
     rows = []
     for p in regionprops(labels):
@@ -397,23 +383,15 @@ def process(cfg: Settings):
 
         # save CSV
         series_name = getattr(img, "name", f"series_{idx}")
-        safe = "".join(
-            ch if ch.isalnum() or ch in "-_." else "_" for ch in str(series_name)
-        )
+        safe = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in str(series_name))
         csv_path = out_dir / f"{idx:03d}_{safe}_centroids.csv"
         df.to_csv(csv_path, index=False)
 
-        print(
-            f"[{idx}] {series_name}: ZYX {volume.shape} | found {len(df)} cells | saved -> {csv_path}"
-        )
+        print(f"[{idx}] {series_name}: ZYX {volume.shape} | found {len(df)} cells | saved -> {csv_path}")
 
         # visualize
         if cfg.visualize:
-            pts = (
-                df[["z_vox", "y_vox", "x_vox"]].to_numpy(dtype=np.float32)
-                if len(df)
-                else np.empty((0, 3))
-            )
+            pts = df[["z_vox", "y_vox", "x_vox"]].to_numpy(dtype=np.float32) if len(df) else np.empty((0, 3))
             visualize(
                 volume,
                 lab if cfg.show_labels else None,
