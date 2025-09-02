@@ -1,24 +1,22 @@
 data:
-    lif_path: "/home/sasce/PycharmProjects/cellseg3d/data/2025.07.24_right_after_seeding.lif"
-    valid_idx: [8]
+    #lif_path: "/home/sasce/PycharmProjects/cellseg3d/data/2025.07.24_right_after_seeding.lif"
+    lif_path: "/home/sasce/PycharmProjects/cellseg3d/data/Project.lif"
+    valid_idx: [5]
     output_dir: "/home/sasce/PycharmProjects/cellseg3d/data/out/"
 
 acquisition:
-    preferred_channel: 0
-    preferred_timepoint: 0
     default_spacing_um:
         dz: 1.0
         dy: 1.0
         dx: 1.0
 
 segmentation:
-    denoise_method: "gaussian" # "tv" | "nlm" | "bilateral" | "gaussian" | "wavelet" | "none"
+    denoise_method: "none" # "tv" | "nlm" | "bilateral" | "gaussian" | "wavelet" | "none"
     denoise_params:
-        patch_size: 3        # example for NLM
+        patch_size: 3 # example for NLM
         patch_distance: 5
-        sigma_color: 0.1     # example for bilateral
-        target_um: 0.6       # example for Gaussian
-
+        sigma_color: 0.1 # example for bilateral
+        target_um: 0.6 # example for Gaussian
 
     # -------- threshold (for the cell channel) --------
     threshold:
@@ -26,7 +24,7 @@ segmentation:
         percentile: 99.2 # only used if method == 'percentile'
 
     # -------- morphology (pre-watershed) --------
-    min_voxels: 100 # remove objects smaller than this (voxels)
+    min_voxels: 200 # remove objects smaller than this (voxels)
     morphology:
         open_radius: 1
         close_radius: 0

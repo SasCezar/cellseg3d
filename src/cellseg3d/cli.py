@@ -1,4 +1,3 @@
-# cli.py
 import logging
 from pathlib import Path
 
@@ -47,7 +46,6 @@ def _build_layers(
     seg: SegmentResult,
     show_all_debug: bool,
     viz_cfg,
-    spacing: tuple[float, float, float],  # <-- pass (dz, dy, dx)
 ):
     layers: list[LayerSpec] = []
 
@@ -137,6 +135,15 @@ def _build_layers(
                     kwargs={"colormap": "viridis", "opacity": 0.7},
                 )
             )
+        if "density_prob" in seg.debug:
+            layers.append(
+                LayerSpec(
+                    name="density_prob",
+                    kind="image",
+                    data=seg.debug["density_prob"],
+                    kwargs={"colormap": "magma", "opacity": 0.7},
+                )
+            )
 
     return layers
 
@@ -195,7 +202,7 @@ def run(
 
         if cfg.visualization.enabled:
             try:
-                layers = _build_layers(vol0, vol1, seg, cfg.visualization.show_debug_layers, cfg.visualization, spacing)
+                layers = _build_layers(vol0, vol1, seg, cfg.visualization.show_debug_layers, cfg.visualization)
                 layers.append(
                     LayerSpec(
                         name="centroids",

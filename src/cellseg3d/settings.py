@@ -1,4 +1,3 @@
-from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -7,9 +6,7 @@ import yaml
 from pydantic import BaseModel, Field, PositiveInt, field_validator
 
 
-# -----------------------------------
 # Enums for clarity & typo protection
-# -----------------------------------
 class VolumeMode(str, Enum):
     translucent = "translucent"
     mip = "mip"
@@ -22,9 +19,7 @@ class WatershedMethod(str, Enum):
     peaks = "peaks"
 
 
-# ---------------------
 # Acquisition settings
-# ---------------------
 class Spacing(BaseModel):
     dz: float = Field(..., gt=0)
     dy: float = Field(..., gt=0)
@@ -45,14 +40,10 @@ class DataCfg(BaseModel):
 
 
 class AcquisitionCfg(BaseModel):
-    preferred_channel: int = 0
-    preferred_timepoint: int = 0
     default_spacing_um: Spacing
 
 
-# ---------------------
 # Segmentation settings
-# ---------------------
 class ThresholdCfg(BaseModel):
     method: str = "otsu"  # 'otsu'|'yen'|'li'|'triangle'|'percentile'
     percentile: float = 99.0  # used if method == 'percentile'
@@ -102,9 +93,7 @@ class SegmentationCfg(BaseModel):
     post_close_radius: int = 0
 
 
-# ---------------------
 # Visualization settings
-# ---------------------
 class SurfaceCfg(BaseModel):
     make: bool = False
     smoothing: float = 1.0
@@ -128,16 +117,12 @@ class VisualizationCfg(BaseModel):
     save_debug_npz: bool = False  # save intermediates to disk
 
 
-# ---------------------
 # Runtime settings
-# ---------------------
 class RuntimeCfg(BaseModel):
     log_level: str = "INFO"
 
 
-# ---------------------
 # Root settings object
-# ---------------------
 class Settings(BaseModel):
     data: DataCfg
     acquisition: AcquisitionCfg

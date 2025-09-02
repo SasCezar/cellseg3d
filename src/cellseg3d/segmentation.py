@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
@@ -17,7 +16,7 @@ from skimage.restoration import denoise_tv_chambolle, denoise_nl_means, estimate
 from .settings import SegmentationCfg
 
 # ---- central numeric control ----
-IMAGE_DTYPE = np.float32
+IMAGE_DTYPE = np.float16
 DIST_DTYPE = np.float32
 
 Spacing = Tuple[float, float, float]  # (dz, dy, dx)
@@ -88,6 +87,61 @@ def _maybe_denoise(vol, method: str, params: dict, spacing_um):
             channel_axis=None,
         ).astype(vol.dtype, copy=False)
     return vol
+
+def density_from_mask(
+    bw: np.ndarray,  # binary mask (True where objects are)
+    spacing_um: tuple[float, float, float],  # (dz, dy, dx)
+    sigma_um: float = 2.0,  # KDE bandwidth in microns
+    core_alpha: float = 0,  # >1 emphasizes cores; 0=flat mass
+    out_mode: str = "prob",  # "prob" in [0,1] or "per_um3"
+) -> np.ndarray:
+    """
+    Build a 3D density lattice from a mask by:
+      1) computing distance-to-background inside objects (in µm),
+      2) converting that to a mass field (distance^alpha),
+      3) convolving with an anisotropic Gaussian of sigma=sigma_um.
+
+    Returns:
+      - out_mode="prob": float32 in [0,1] (max-normalized, edge-corrected)
+      - out_mode="per_um3": physical density (mass per µm^3)
+    """
+    assert bw.ndim == 3
+    dz, dy, dx = spacing_um
+
+    # 1) distance to background INSIDE objects (µm)
+    d_in = ndi.distance_transform_edt(bw, sampling=(dz, dy, dx)).astype(np.float32)
+
+    # 2) mass field: emphasize cores with alpha (alpha=1 linear; >1 more peaky)
+    if core_alpha <= 0:
+        mass = bw.astype(np.float32, copy=False)  # flat mass
+    else:
+        mass = (d_in**core_alpha).astype(np.float32, copy=False)
+
+    # 3) KDE via Gaussian blur with physical sigma (convert to voxel units)
+    sig = (sigma_um / dz, sigma_um / dy, sigma_um / dx)
+    density = ndi.gaussian_filter(mass, sigma=sig).astype(np.float32)
+
+    # Edge correction (avoid low values near borders due to truncated kernel)
+    # Convolve a mask of ones with the same kernel and divide.
+    norm = ndi.gaussian_filter(np.ones_like(mass, dtype=np.float32), sigma=sig)
+    # keep numerical stability
+    eps = np.finfo(np.float32).eps
+    density /= norm + eps
+
+    if out_mode == "per_um3":
+        # gaussian_filter is L1-normalized in discrete voxels.
+        # Convert from "mass per voxel" to "mass per µm^3".
+        voxel_um3 = dz * dy * dx
+        return (density / voxel_um3).astype(np.float32)
+
+    if out_mode == "prob":
+        # Map to [0,1] for viewing as a probability-like field.
+        m = float(density.max())
+        if m > 0:
+            density /= m
+        return density.astype(np.float32)
+
+    raise ValueError("out_mode must be 'prob' or 'per_um3'")
 
 
 def _threshold_scalar(vol: np.ndarray, method: str, percentile: float) -> float:
@@ -212,6 +266,14 @@ def segment_3d(
     )
     dbg["bw_post"] = bw.astype(np.uint8, copy=False)
 
+    density_prob = density_from_mask(
+        bw,
+        spacing_um=spacing_um,
+        sigma_um=2.5,  # tune KDE bandwidth in µm
+        core_alpha=1.5,  # 1–2 usually looks good; higher => sharper cores
+        out_mode="prob",  # or "per_um3"
+    )
+    dbg["density_prob"] = density_prob
     # early return if watershed disabled
     labels = cc_label(bw, connectivity=3)
     if not bool(getattr(cfg.watershed, "enabled", True)) or not np.any(bw):
