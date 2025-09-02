@@ -11,7 +11,7 @@ acquisition:
 segmentation:
     denoise_method: "none" # none|gaussian|tv|nlm|bilateral
     denoise_params: {}
-    threshold: { method: "otsu", percentile: 99.0 }
+    threshold: { method: "otsu" }
     morphology: { open_radius: 3, close_radius: 0 }
     min_voxels: 100
     watershed:

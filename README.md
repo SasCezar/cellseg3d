@@ -5,7 +5,7 @@
 ![Windows](https://img.shields.io/badge/os-windows-blue)
 ![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)
 
-**cellseg3d** is a memory-optimized 3D segmentation pipeline for **confocal / electron microscopy** LIF datasets (Leica `.lif`), built with modern Python tools.
+**cellseg3d** is a 3D segmentation pipeline for **confocal / electron microscopy** LIF datasets (Leica `.lif`), built with modern Python tools.
 
 It provides reproducible segmentation of nuclei or cells, handles large 3D stacks efficiently, and integrates tightly with **Napari** for visualization.
 Additionally, the second channel can optionally serve as a **tissue/edge prior** to refine watershed splitting of touching cells.
@@ -30,8 +30,8 @@ Additionally, the second channel can optionally serve as a **tissue/edge prior**
 ## 🚀 Quick start
 
 ```bash
-# Install dependencies (requires Python >=3.11)
-uv sync    # or: pip install -e .
+# Install dependencies (requires Python >=3.13)
+uv sync    # or: uv pip install -e .
 
 # Run segmentation on the dataset specified in config.yaml
 cellseg3d run -c config.yaml
@@ -54,7 +54,7 @@ cellseg3d run -c config.yaml
 
 ## 🛠️ Tech stack
 
--   **Python** (3.13)
+-   **Python** (3.13+)
 -   **NumPy / SciPy** (numerics, morphology, distance transforms)
 -   **scikit-image** (segmentation, denoising, regionprops)
 -   **Pandas** (feature tables)

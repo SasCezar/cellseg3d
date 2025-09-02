@@ -1,8 +1,15 @@
+[build-system]
+requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
 [project]
 name = "cellseg3d"
 version = "0.1.0"
-description = "Add your description here"
+description = "A 3D segmentation pipeline for confocal / electron microscopy LIF images"
 readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Cezar Sas" }]
+keywords = ["3D", "segmentation", "microscopy", "napari", "skimage"]
 requires-python = ">=3.13"
 dependencies = [
     "matplotlib>=3.10.6",
