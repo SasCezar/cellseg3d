@@ -27,7 +27,11 @@ dependencies = [
 dev = ["mypy>=1.17.1", "ruff>=0.12.11"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["cellseg3d"]
+packages = ["src/cellseg3d"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/cellseg3d", "README.md", "LICENSE", "pyproject.toml"]
+
 
 [project.scripts]
 cellseg3d = "cellseg3d.cli:app"
